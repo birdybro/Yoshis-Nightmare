@@ -197,8 +197,11 @@ assign BUTTONS = 0;
 
 wire [1:0] ar = status[9:8];
 
-assign VIDEO_ARX = (!ar) ? 12'd4 : (ar - 1'd1);
-assign VIDEO_ARY = (!ar) ? 12'd3 : 12'd0;
+// assign VIDEO_ARX = (!ar) ? 12'd4 : (ar - 1'd1);
+// assign VIDEO_ARY = (!ar) ? 12'd3 : 12'd0;
+
+assign VIDEO_ARX = status[8] ? 8'd16 : 8'd4;
+assign VIDEO_ARY = status[8] ? 8'd9  : 8'd3;
 
 `include "build_id.v" 
 localparam CONF_STR = {
@@ -210,9 +213,10 @@ localparam CONF_STR = {
 };
 
 wire forced_scandoubler;
-wire  [1:0] buttons;
+wire [ 1:0] buttons;
 wire [31:0] status;
 wire [10:0] ps2_key;
+wire [3:0] joy0;
 
 hps_io #(.CONF_STR(CONF_STR)) hps_io
 (
@@ -226,6 +230,8 @@ hps_io #(.CONF_STR(CONF_STR)) hps_io
 	.buttons(buttons),
 	.status(status),
 	.status_menumask({status[5]}),
+
+	.joystick_0(joy0),
 	
 	.ps2_key(ps2_key)
 );
@@ -250,25 +256,23 @@ wire HBlank;
 wire HSync;
 wire VBlank;
 wire VSync;
-wire ce_pix;
-wire [7:0] video;
+wire red,green,blue;
 
-mycore mycore
+wire ce_pix;
+wire [ 7:0] video;
+
+display_top display_top
 (
 	.clk(clk_sys),
-	.reset(reset),
-	
-	.pal(status[2]),
-	.scandouble(forced_scandoubler),
-
-	.ce_pix(ce_pix),
-
-	.HBlank(HBlank),
-	.HSync(HSync),
-	.VBlank(VBlank),
-	.VSync(VSync),
-
-	.video(video)
+	.hard_reset(reset),
+	.rgb({{4{red}}, {4{green}}, {4{blue}}}), // [11:0]
+	.hsync(Hsync),
+	.vsync(VSync),
+	.data(joy0), // send controller inputs here
+	.latch(), // controller outputs here? not needed i think?
+	.nes_clk(), // this is for the nes controller clock outputs, not needed, or redirected somehow
+	.sseg(), // 7seg display original core used, not needed
+	.an() // mux signals used for 7seg display
 );
 
 assign CLK_VIDEO = clk_sys;
@@ -277,12 +281,8 @@ assign CE_PIXEL = ce_pix;
 assign VGA_DE = ~(HBlank | VBlank);
 assign VGA_HS = HSync;
 assign VGA_VS = VSync;
-assign VGA_G  = (!col || col == 2) ? video : 8'd0;
-assign VGA_R  = (!col || col == 1) ? video : 8'd0;
-assign VGA_B  = (!col || col == 3) ? video : 8'd0;
-
-reg  [26:0] act_cnt;
-always @(posedge clk_sys) act_cnt <= act_cnt + 1'd1; 
-assign LED_USER    = act_cnt[26]  ? act_cnt[25:18]  > act_cnt[7:0]  : act_cnt[25:18]  <= act_cnt[7:0];
+assign VGA_G  = green;
+assign VGA_R  = red;
+assign VGA_B  = blue;
 
 endmodule
